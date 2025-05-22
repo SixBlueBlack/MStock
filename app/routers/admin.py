@@ -2,6 +2,8 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, and_, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import User, Instrument, Balance
 from app.dependencies import get_current_user, check_admin
 from app.database import get_db
@@ -71,29 +73,25 @@ async def update_balance(
 @router.post("/instrument", response_model=InstrumentResponse)
 async def create_instrument(
         instrument_data: InstrumentCreate,
-        db=Depends(get_db),
-        user=Depends(get_current_user)
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
-    existing = await db.execute(
-        select(Instrument).where(Instrument.symbol == instrument_data.symbol)
-    )
+    existing = await db.execute(select(Instrument).filter(Instrument.symbol == instrument_data.symbol))
     if existing.scalar():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Instrument with this symbol already exists"
-        )
+        raise HTTPException(status_code=409, detail="Instrument exists")
 
-    instrument = Instrument(**instrument_data.dict())
-    db.add(instrument)
+    new_instrument = Instrument(
+        symbol=instrument_data.symbol,
+        name=instrument_data.name,
+        is_active=True
+    )
+    db.add(new_instrument)
     await db.commit()
-    await db.refresh(instrument)
-    return instrument
+    await db.refresh(new_instrument)
+    return new_instrument
 
 
 @router.delete("/instrument/{symbol}")
