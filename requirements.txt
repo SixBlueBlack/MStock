@@ -8,3 +8,4 @@ uvicorn>=0.22.0
 winfcntl>=1.1.0
 alembic>=1.15.0
 psycopg2>=2.9
+passlib>=1.7.0

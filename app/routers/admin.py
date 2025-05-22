@@ -1,11 +1,12 @@
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 from app.models import User, Instrument, Balance
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, check_admin
 from app.database import get_db
 from pydantic import BaseModel
+from app.schemas import InstrumentCreate, InstrumentResponse
 
 router = APIRouter()
 
@@ -14,17 +15,6 @@ class BalanceUpdate(BaseModel):
     user_id: int
     instrument: str
     amount: float
-
-
-class InstrumentCreate(BaseModel):
-    symbol: str
-    name: str
-
-
-async def check_admin(user=Depends(get_current_user)):
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return user
 
 
 @router.delete("/users/{user_id}")
@@ -78,27 +68,62 @@ async def update_balance(
     return balance
 
 
-@router.post("/instruments")
-async def create_instrument(instrument_data: InstrumentCreate,
-                            db=Depends(get_db),
-                            admin=Depends(check_admin)):
+@router.post("/instrument", response_model=InstrumentResponse)
+async def create_instrument(
+        instrument_data: InstrumentCreate,
+        db=Depends(get_db),
+        user=Depends(get_current_user)
+):
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+
+    existing = await db.execute(
+        select(Instrument).where(Instrument.symbol == instrument_data.symbol)
+    )
+    if existing.scalar():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Instrument with this symbol already exists"
+        )
+
     instrument = Instrument(**instrument_data.dict())
     db.add(instrument)
-    try:
-        await db.commit()
-    except IntegrityError:
-        raise HTTPException(status_code=400, detail="Instrument already exists")
+    await db.commit()
+    await db.refresh(instrument)
     return instrument
 
 
-@router.delete("/instruments/{symbol}")
-async def delete_instrument(symbol: str,
-                            db=Depends(get_db),
-                            admin=Depends(check_admin)):
-    instrument = await db.get(Instrument, symbol)
-    if not instrument:
-        raise HTTPException(status_code=404, detail="Instrument not found")
+@router.delete("/instrument/{symbol}")
+async def delete_instrument(
+        symbol: str,
+        db=Depends(get_db),
+        user=Depends(get_current_user)
+):
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
 
-    instrument.is_active = False
+    result = await db.execute(
+        select(Instrument).where(Instrument.symbol == symbol)
+    )
+    instrument = result.scalar()
+
+    if not instrument:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instrument not found"
+        )
+
+    await db.execute(
+        update(Instrument)
+        .where(Instrument.symbol == symbol)
+        .values(is_active=False)
+    )
     await db.commit()
-    return {"status": "deleted"}
+
+    return {"message": "Instrument delisted successfully"}

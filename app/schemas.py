@@ -3,6 +3,15 @@ from typing import Optional, List
 from datetime import datetime
 
 
+class InstrumentCreate(BaseModel):
+    symbol: str
+    name: str
+
+
+class InstrumentResponse(InstrumentCreate):
+    is_active: bool
+
+
 class UserCreate(BaseModel):
     username: str
 
@@ -50,9 +59,3 @@ class TradeHistory(BaseModel):
     quantity: float
     executed_at: datetime
     instrument: str
-
-
-class InstrumentResponse(BaseModel):
-    symbol: str
-    name: str
-    is_active: bool

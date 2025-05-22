@@ -6,7 +6,7 @@ import enum
 
 metadata = MetaData()
 
-# Выносим перечисления на верхний уровень
+
 class OrderType(str, enum.Enum):
     LIMIT = "limit"
     MARKET = "market"
@@ -56,7 +56,7 @@ def define_all_models(base):
         id = Column(Integer, primary_key=True)
         user_id = Column(Integer, ForeignKey("users.id"))
         instrument_symbol = Column(String(10), ForeignKey("instruments.symbol"))
-        type = Column(Enum(OrderType))  # Используем глобальное перечисление
+        type = Column(Enum(OrderType))
         side = Column(Enum(OrderSide))
         price = Column(Numeric(20, 2))
         quantity = Column(Numeric(20, 2))
@@ -79,7 +79,6 @@ def define_all_models(base):
     return User, Balance, Instrument, Order, Trade
 
 
-# Экспортируем все необходимые сущности
 User, Balance, Instrument, Order, Trade = define_all_models(Base)
 __all__ = [
     'OrderType',
