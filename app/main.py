@@ -1,8 +1,8 @@
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.database import engine, Base, wait_for_db
-from app.routers import users, orders, admin
+from app.database import engine, Base
+from app.endpoints import router as api_router
 import logging
 
 logging.basicConfig(
@@ -15,7 +15,13 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    logger = logging.getLogger("uvicorn.access")
+    logger.info("Application startup complete")
+
     yield
+
+    logger.info("Application shutdown")
     await engine.dispose()
 
 
@@ -33,14 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(users.router, prefix="/api/v1", tags=["users"])
-app.include_router(orders.router, prefix="/api/v1", tags=["orders"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
-
-
-@app.on_event("startup")
-async def startup():
-    pass
+app.include_router(api_router)
 
 
 @app.get("/health")

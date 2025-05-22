@@ -1,92 +1,56 @@
-from sqlalchemy import Column, Integer, String, Numeric, Enum, ForeignKey, DateTime, Boolean
-from sqlalchemy.sql import func
-from app.database import Base
-from sqlalchemy import MetaData
-import enum
+from datetime import datetime
+from uuid import uuid4
+from sqlalchemy import Column, String, Integer, Enum as SqlEnum, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import relationship
 
-metadata = MetaData()
-
-
-class OrderType(str, enum.Enum):
-    LIMIT = "limit"
-    MARKET = "market"
+from app.database import Base, engine
+from app.schemas import UserRole, Direction, OrderStatus
 
 
-class OrderSide(str, enum.Enum):
-    BUY = "buy"
-    SELL = "sell"
+class User(Base):
+    __tablename__ = "users"
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name = Column(String(50), nullable=False)
+    role = Column(SqlEnum(UserRole), default=UserRole.USER)
+    api_key = Column(String(36), unique=True, index=True)
+    balances = relationship("Balance", back_populates="user")
 
 
-class OrderStatus(str, enum.Enum):
-    ACTIVE = "active"
-    CANCELED = "canceled"
-    FILLED = "filled"
+class Instrument(Base):
+    __tablename__ = "instruments"
+    ticker = Column(String(10), primary_key=True)
+    name = Column(String(50))
 
 
-def define_all_models(base):
-    class User(base):
-        __tablename__ = "users"
-        __table_args__ = {'extend_existing': True}
-
-        id = Column(Integer, primary_key=True)
-        username = Column(String(50), unique=True)
-        token = Column(String(100), unique=True)
-        is_admin = Column(Boolean, default=False)
-
-    class Balance(base):
-        __tablename__ = "balances"
-        __table_args__ = {'extend_existing': True}
-
-        user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-        instrument = Column(String(10), primary_key=True)
-        amount = Column(Numeric(20, 2), default=0)
-
-    class Instrument(base):
-        __tablename__ = "instruments"
-        __table_args__ = {'extend_existing': True}
-
-        symbol = Column(String(10), primary_key=True)
-        name = Column(String(100))
-        is_active = Column(Boolean, default=True)
-
-    class Order(base):
-        __tablename__ = "orders"
-        __table_args__ = {'extend_existing': True}
-
-        id = Column(Integer, primary_key=True)
-        user_id = Column(Integer, ForeignKey("users.id"))
-        instrument_symbol = Column(String(10), ForeignKey("instruments.symbol"))
-        type = Column(Enum(OrderType))
-        side = Column(Enum(OrderSide))
-        price = Column(Numeric(20, 2))
-        quantity = Column(Numeric(20, 2))
-        status = Column(Enum(OrderStatus), default=OrderStatus.ACTIVE)
-        created_at = Column(DateTime(timezone=True), server_default=func.now())
-        updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    class Trade(base):
-        __tablename__ = "trades"
-        __table_args__ = {'extend_existing': True}
-
-        id = Column(Integer, primary_key=True)
-        buyer_order_id = Column(Integer, ForeignKey("orders.id"))
-        seller_order_id = Column(Integer, ForeignKey("orders.id"))
-        instrument_symbol = Column(String(10))
-        price = Column(Numeric(20, 2))
-        quantity = Column(Numeric(20, 2))
-        executed_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    return User, Balance, Instrument, Order, Trade
+class Order(Base):
+    __tablename__ = "orders"
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    direction = Column(SqlEnum(Direction))
+    ticker = Column(String(10))
+    qty = Column(Integer)
+    price = Column(Integer)
+    status = Column(SqlEnum(OrderStatus), default=OrderStatus.NEW)
+    order_type = Column(String(10))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    filled = Column(Integer, default=0)
+    user = relationship("User")
 
 
-User, Balance, Instrument, Order, Trade = define_all_models(Base)
-__all__ = [
-    'OrderType',
-    'OrderSide',
-    'OrderStatus',
-    'User',
-    'Balance',
-    'Instrument',
-    'Order',
-    'Trade'
-]
+class Balance(Base):
+    __tablename__ = "balances"
+    user_id = Column(PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    ticker = Column(String(10), primary_key=True)
+    amount = Column(Integer, default=0)
+    user = relationship("User", back_populates="balances")
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    ticker = Column(String(10))
+    amount = Column(Integer)
+    price = Column(Integer)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+

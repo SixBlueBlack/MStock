@@ -1,61 +1,96 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Annotated
+from enum import Enum
+
+from pydantic import BaseModel, UUID4, conint, Field, StringConstraints, ConfigDict
 
 
-class InstrumentCreate(BaseModel):
-    symbol: str
+class UserRole(Enum):
+    USER = "USER"
+    ADMIN = "ADMIN"
+
+
+class Direction(Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderStatus(Enum):
+    NEW = "NEW"
+    EXECUTED = "EXECUTED"
+    PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
+    CANCELLED = "CANCELLED"
+
+
+class NewUser(BaseModel):
+    name: str = Field(..., min_length=3)
+
+
+class UserResponse(BaseModel):
+    id: str
     name: str
+    role: str
+    api_key: str
+
+    class Config:
+        from_attributes = True
 
 
-class InstrumentResponse(InstrumentCreate):
-    is_active: bool
+TickerType = Annotated[
+    str,
+    StringConstraints(
+        pattern=r'^[A-Z]{2,10}$',
+        to_upper=True,
+        strip_whitespace=True
+    )
+]
 
 
-class UserCreate(BaseModel):
-    username: str
+class InstrumentSchema(BaseModel):
+    name: str
+    ticker: TickerType
 
 
-class UserResponse(UserCreate):
-    token: str
+class Level(BaseModel):
+    price: int
+    qty: int
 
 
-class BalanceResponse(BaseModel):
-    instrument: str
-    amount: float
+class L2OrderBook(BaseModel):
+    bid_levels: List[Level]
+    ask_levels: List[Level]
 
 
-class OrderCreate(BaseModel):
-    type: str = Field(..., pattern="^(limit|market)$")
-    instrument: str
-    side: str = Field(..., pattern="^(buy|sell)$")
-    quantity: float
-    price: Optional[float] = None
-
-
-class OrderResponse(OrderCreate):
-    id: int
-    status: str
-    created_at: datetime
-
-
-class OrderBookResponse(BaseModel):
-    bids: List[tuple[float, float]]
-    asks: List[tuple[float, float]]
-
-
-class Candle(BaseModel):
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
+class TransactionSchema(BaseModel):
+    ticker: str
+    amount: int
+    price: int
     timestamp: datetime
 
+    model_config = ConfigDict(
+        from_attributes=True,
+        protected_namespaces=())
 
-class TradeHistory(BaseModel):
-    id: int
-    price: float
-    quantity: float
-    executed_at: datetime
-    instrument: str
+
+class LimitOrderBody(BaseModel):
+    direction: Direction
+    ticker: str
+    qty: conint(ge=1)
+    price: conint(gt=0)
+
+
+class MarketOrderBody(BaseModel):
+    direction: Direction
+    ticker: str
+    qty: conint(ge=1)
+
+
+class CreateOrderResponse(BaseModel):
+    success: bool = Field(default=True)
+    order_id: UUID4
+
+
+class BalanceOperation(BaseModel):
+    user_id: UUID4
+    ticker: str
+    amount: conint(gt=0)
