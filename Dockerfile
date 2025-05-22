@@ -1,8 +1,8 @@
 FROM python:3.10
 
-RUN mkdir /<work_dir>
+RUN mkdir /MStock
 
-WORKDIR /<work_dir>
+WORKDIR /MStock
 
 COPY requirements.txt .
 
@@ -10,6 +10,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-RUN chmod +x /<work_dir>/docker/*.sh
+RUN chmod +x /MStock/docker/*.sh
 
-ENTRYPOINT /<work_dir>/docker/init.sh
+ENTRYPOINT /MStock/docker/init.sh

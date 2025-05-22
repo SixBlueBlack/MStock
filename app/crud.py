@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from models import User, Balance, Order
+from app.models import User, Balance, Order
 
 
 async def create_user(db, username: str):

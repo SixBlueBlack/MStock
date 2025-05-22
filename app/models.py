@@ -1,8 +1,10 @@
 from sqlalchemy import Column, Integer, String, Numeric, Enum, ForeignKey, DateTime, Boolean
 from sqlalchemy.sql import func
 from app.database import Base
+from sqlalchemy import MetaData
 import enum
 
+metadata = MetaData()
 
 # Выносим перечисления на верхний уровень
 class OrderType(str, enum.Enum):

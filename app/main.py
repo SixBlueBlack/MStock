@@ -1,7 +1,7 @@
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.database import engine, Base
+from app.database import engine, Base, wait_for_db
 from app.routers import users, orders, admin
 
 
@@ -30,6 +30,11 @@ app.add_middleware(
 app.include_router(users.router, prefix="/api/v1", tags=["users"])
 app.include_router(orders.router, prefix="/api/v1", tags=["orders"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+
+
+@app.on_event("startup")
+async def startup():
+    pass
 
 
 @app.get("/health")
