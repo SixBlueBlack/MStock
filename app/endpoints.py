@@ -17,8 +17,8 @@ from app.schemas import UserResponse, BalanceOperation, InstrumentSchema, OrderS
 router = APIRouter()
 
 
-@router.post("/api/v1/public/register", response_model=UserResponse)
-def register(user: NewUser, db: Session = Depends(get_db)):
+@router.post("/public/register", response_model=UserResponse)
+async def register(user: NewUser, db: AsyncSession = Depends(get_db)):
     api_key = str(uuid4())
     db_user = User(
         id=uuid4(),
@@ -28,11 +28,18 @@ def register(user: NewUser, db: Session = Depends(get_db)):
     )
     db.add(db_user)
     try:
-        db.commit()
+        await db.commit()
     except SQLAlchemyError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Registration failed")
-    return db_user
+    await db.refresh(db_user)
+
+    return {
+        "id": str(db_user.id),
+        "name": db_user.name,
+        "role": db_user.role.value,
+        "api_key": db_user.api_key
+    }
 
 
 @router.get("/api/v1/public/instrument", response_model=List[InstrumentSchema])
