@@ -2,9 +2,11 @@ from typing import Union, List
 from uuid import uuid4
 
 from fastapi import Depends, HTTPException, APIRouter
+from fastapi.encoders import jsonable_encoder
 from pydantic import UUID4
-from sqlalchemy import and_, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_, text, select
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_admin_user, get_db, get_current_user, match_order
@@ -144,16 +146,29 @@ def cancel_order(order_id: UUID4, user: User = Depends(get_current_user), db: Se
     return {"success": True}
 
 
-@router.post("/api/v1/admin/instrument", response_model=dict)
-def add_instrument(instrument: InstrumentSchema, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    db_instrument = Instrument(**instrument.dict())
-    db.add(db_instrument)
+@router.post("/admin/instrument")
+async def add_instrument(
+        instrument: InstrumentSchema,
+        db: AsyncSession = Depends(get_db)
+):
     try:
-        db.commit()
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Instrument exists")
-    return {"success": True}
+        exists = await db.execute(
+            select(Instrument).filter(Instrument.ticker == instrument.ticker))
+        if exists.scalar():
+            raise HTTPException(status_code=400, detail="Instrument already exists")
+
+        db_instrument = Instrument(
+            ticker=instrument.ticker,
+            name=instrument.name
+        )
+        db.add(db_instrument)
+        await db.commit()
+        return {"success": True}
+    except IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="Instrument already exists"
+        )
 
 
 @router.delete("/api/v1/admin/instrument/{ticker}", response_model=dict)

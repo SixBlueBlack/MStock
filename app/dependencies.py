@@ -1,37 +1,49 @@
-from fastapi.security import APIKeyHeader
-from fastapi import Depends, HTTPException, status, Header
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, sessionmaker
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Header, Security
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError, NoResultFound
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from app.database import engine
+from app.database import AsyncSessionLocal
 from app.models import User, Order, Balance, Transaction
 from app.schemas import UserRole, Direction, OrderStatus
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 security = APIKeyHeader(name="Authorization")
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 
 async def get_current_user(
-        authorization: str = Header(None),
-        db: Session = Depends(get_db)
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        db: AsyncSession = Depends(get_db)
 ) -> User:
-    if not authorization or not authorization.startswith("TOKEN "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header is missing"
+        )
 
-    api_key = authorization.split(" ")[1]
-    user = db.query(User).filter(User.api_key == api_key).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    api_key = credentials.credentials
+
+    try:
+        user = await db.execute(select(User).filter(User.api_key == api_key))
+        return user.scalar_one()
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid authentication credentials"
+        )
 
 
 async def get_admin_user(user: User = Depends(get_current_user)) -> User:

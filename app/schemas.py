@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Annotated
 from enum import Enum
 
-from pydantic import BaseModel, UUID4, conint, Field, StringConstraints, ConfigDict
+from pydantic import BaseModel, UUID4, conint, Field, StringConstraints, ConfigDict, field_validator
 
 
 class UserRole(Enum):
@@ -49,6 +49,12 @@ TickerType = Annotated[
 class InstrumentSchema(BaseModel):
     name: str
     ticker: TickerType
+
+    @field_validator('ticker')
+    def validate_ticker(cls, v):
+        if not v.isupper() or len(v) < 2 or len(v) > 10:
+            raise ValueError("Ticker must be 2-10 uppercase letters")
+        return v
 
 
 class Level(BaseModel):
